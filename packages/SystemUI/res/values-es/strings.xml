@@ -210,7 +210,7 @@
     <string name="quick_settings_swaggersun">Swagger Sunday</string>
     <string name="quick_settings_fbgt">FBGT</string>
     <string name="quick_settings_powermenu">Menú apagar</string>
-    <string name="quick_settings_rootbox">NovaGen</string>
+    <string name="quick_settings_novagen">NovaGen</string>
     <string name="quick_settings_profile">Perfil</string>
     <string name="quick_settings_recording">Grabando...</string>
     <string name="quick_settings_recordingcap">Grabación capturada</string>
@@ -342,7 +342,7 @@
     <string name="toggle_QUICKRECORD">Grabación rápida</string>
     <string name="toggle_STATUSBAR">Ocultar barra de estado</string>
     <string name="toggle_QUIETHOURS">Horas de silencio</string>
-    <string name="toggle_ROOTBOX">NovaGen</string>
+    <string name="toggle_NOVAGEN">NovaGen</string>
     <string name="toggle_SLEEP">Apagar pantalla</string>
     <string name="toggle_PIE">Controles circulares</string>
     <string name="toggle_DARK">Dark RB</string>

@@ -98,7 +98,7 @@ public class ToggleManager {
     public static final String HALO_TOGGLE = "HALO";
     public static final String STATUSBAR_TOGGLE = "STATUSBAR";
     public static final String QUIETHOURS_TOGGLE = "QUIETHOURS";
-    public static final String ROOTBOX_TOGGLE = "ROOTBOX";
+    public static final String NOVAGEN_TOGGLE = "NOVAGEN";
     public static final String SLEEP_TOGGLE = "SLEEP";
     public static final String PIE_TOGGLE = "PIE";
     public static final String DARK_TOGGLE = "DARK";
@@ -176,7 +176,7 @@ public class ToggleManager {
             toggleMap.put(HALO_TOGGLE, HaloToggle.class);
             toggleMap.put(STATUSBAR_TOGGLE, StatusbarToggle.class);
             toggleMap.put(QUIETHOURS_TOGGLE, QuietHoursToggle.class);
-            toggleMap.put(ROOTBOX_TOGGLE, RootBoxToggle.class);
+            toggleMap.put(NOVAGEN_TOGGLE, NovaGenToggle.class);
             toggleMap.put(SLEEP_TOGGLE, SleepToggle.class);
             toggleMap.put(PIE_TOGGLE, PieToggle.class);
             toggleMap.put(DARK_TOGGLE, DarkToggle.class);
