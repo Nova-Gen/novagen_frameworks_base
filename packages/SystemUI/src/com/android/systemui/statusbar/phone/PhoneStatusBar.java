@@ -493,8 +493,6 @@ public class PhoneStatusBar extends BaseStatusBar {
         mStatusBarView.setStatusBar(this);
         mStatusBarView.setBar(this);
 
-        mBarView = (ViewGroup) mStatusBarView;
-
         // status bar clock
         mClock = (Clock) mStatusBarView.findViewById(R.id.clock);
         mCClock = (ClockCenter) mStatusBarView.findViewById(R.id.center_clock);
@@ -1685,8 +1683,6 @@ public class PhoneStatusBar extends BaseStatusBar {
         }
         View clock = mStatusBarView.findViewById(R.id.clock);
         View cclock = mStatusBarView.findViewById(R.id.center_clock);
-        mShowClock = (Settings.System.getInt(resolver,
-                Settings.System.STATUS_BAR_CLOCK, 1) == 1);
         boolean rightClock = (Settings.System.getInt(mContext.getContentResolver(),
                 Settings.System.STATUSBAR_CLOCK_STYLE, 0) == 0);
         boolean centerClock = (Settings.System.getInt(mContext.getContentResolver(),

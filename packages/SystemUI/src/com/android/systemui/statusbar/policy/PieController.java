@@ -81,6 +81,7 @@ import java.util.List;
 import com.android.internal.statusbar.IStatusBarService;
 import com.android.systemui.R;
 import com.android.systemui.statusbar.BaseStatusBar;
+import com.android.systemui.statusbar.WidgetView;
 import com.android.systemui.statusbar.pie.PieItem;
 import com.android.systemui.statusbar.pie.PieLayout;
 import com.android.systemui.statusbar.pie.PieLayout.PieDrawable;
@@ -323,7 +324,7 @@ public class PieController implements BaseStatusBar.NavigationBarCallback,
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.SPIE_SECOND_LAYER_ACTIVE), false, this);
             resolver.registerContentObserver(
-                    Settings.System.getUriFor(Settings.System.PIE_LONG_PRESS_ENABLE),
+                    Settings.System.getUriFor(Settings.System.SPIE_LONG_PRESS_ENABLE),
                     false,
                     this);
             for (int j = 0; j < 5; j++) { // watch all 5 settings for changes.
@@ -548,7 +549,7 @@ public class PieController implements BaseStatusBar.NavigationBarCallback,
         }
 
         // construct sysinfo slice
-        outer = inner + res.getDimensionPixelSize(R.dimen.pie_sysinfo_height);
+        outer = inner + res.getDimensionPixelSize(R.dimen.pies_sysinfo_height);
         mSysInfo = new PieSysInfo(mContext, mPieContainer, this, PieDrawable.DISPLAY_NOT_AT_TOP);
         mSysInfo.setGeometry(START_ANGLE, 180 - 2 * EMPTY_ANGLE, inner, outer);
         mPieContainer.addSlice(mSysInfo);
@@ -633,7 +634,7 @@ public class PieController implements BaseStatusBar.NavigationBarCallback,
                         Settings.System.SPIE_LONGPRESS_ACTIVITIES_SECOND_LAYER[j]);
             } else {
                 mLongpressActions[j] = Settings.System.getString(resolver,
-                        Settings.System.PIE_LONGPRESS_ACTIVITIES[j]);
+                        Settings.System.SPIE_LONGPRESS_ACTIVITIES[j]);
             }
 
             if (mLongpressActions[j] == null) {
@@ -1025,10 +1026,9 @@ public class PieController implements BaseStatusBar.NavigationBarCallback,
             mHandler.post(mKillTask);
             return;
         } else if (type.equals(ACTION_WIDGETS)) {
-            try {
-                mBarService.toggleWidgets();
-            } catch (RemoteException e) {
-            }
+            Intent toggleWidgets = new Intent(
+                WidgetView.WidgetReceiver.ACTION_TOGGLE_WIDGETS);
+            mContext.sendBroadcast(toggleWidgets);
             return;
         } else if (type.equals(ACTION_LAST_APP)) {
             toggleLastApp();

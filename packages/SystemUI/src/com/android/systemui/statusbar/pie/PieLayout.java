@@ -275,7 +275,7 @@ public class PieLayout extends FrameLayout implements View.OnTouchListener {
         getColors();
 
         mShowBackground = Settings.System.getInt(mContext.getContentResolver(),
-                Settings.System.PIE_SSHOW_BACKGROUND, 1) == 1;
+                Settings.System.SPIE_SHOW_BACKGROUND, 1) == 1;
     }
 
     public void setOnSnapListener(OnSnapListener onSnapListener) {
