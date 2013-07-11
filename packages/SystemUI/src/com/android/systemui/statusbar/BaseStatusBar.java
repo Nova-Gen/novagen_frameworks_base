@@ -30,7 +30,6 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Configuration;
@@ -97,15 +96,12 @@ import com.android.systemui.recent.TaskDescription;
 import com.android.systemui.statusbar.halo.Halo;
 import com.android.systemui.statusbar.phone.QuickSettingsContainerView;
 import com.android.systemui.statusbar.phone.Ticker;
-import com.android.systemui.statusbar.pie.PieLayout;
 import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.SbBatteryController;
 import com.android.systemui.statusbar.policy.Clock;
 import com.android.systemui.statusbar.policy.ClockCenter;
 import com.android.systemui.statusbar.policy.NetworkController;
 import com.android.systemui.statusbar.policy.NotificationRowLayout;
-import com.android.systemui.statusbar.policy.PieController;
-import com.android.systemui.statusbar.policy.PieController.Position;
 import com.android.systemui.statusbar.tablet.StatusBarPanel;
 import com.android.systemui.statusbar.view.PieStatusPanel;
 import com.android.systemui.statusbar.view.PieExpandPanel;
@@ -120,7 +116,6 @@ public abstract class BaseStatusBar extends SystemUI implements
         CommandQueue.Callbacks {
     public static final String TAG = "StatusBar";
     public static final boolean DEBUG = false;
-    public static final boolean DEBUG_INPUT = false;
     public static final boolean MULTIUSER_DEBUG = false;
 
     protected static final int MSG_TOGGLE_RECENTS_PANEL = 1020;
@@ -138,14 +133,6 @@ public abstract class BaseStatusBar extends SystemUI implements
     private AppWindow mAppWindow;
 
     protected static final boolean ENABLE_INTRUDERS = false;
-
-    private boolean mPieShowTrigger = false;
-    private boolean mDisableTriggers = false;
-    private float mPieTriggerThickness;
-    private float mPieTriggerHeight;
-    private int mPieTriggerGravityLeftRight;
-
-    private boolean mPieImeIsShowing = false;
 
     // Should match the value in PhoneWindowManager
     public static final String SYSTEM_DIALOG_REASON_RECENT_APPS = "recentapps";
@@ -212,117 +199,6 @@ public abstract class BaseStatusBar extends SystemUI implements
     public ColorUtils.ColorSettingInfo mLastIconColor;
     public ColorUtils.ColorSettingInfo mLastBackgroundColor;
     protected int mClockColor = com.android.internal.R.color.holo_blue_light;
-
-    /**
-     * An interface for navigation key bars to allow status bars to signal which keys are
-     * currently of interest to the user.<br>
-     * See {@link NavigationBarView} in Phone UI for an example.
-     */
-    public interface NavigationBarCallback {
-        /**
-         * @param hints flags from StatusBarManager (NAVIGATION_HINT...) to indicate which key is
-         * available for navigation
-         * @see StatusBarManager
-         */
-        public abstract void setNavigationIconHints(int hints);
-        /**
-         * @param showMenu {@code true} when an menu key should be displayed by the navigation bar.
-         */
-        public abstract void setMenuVisibility(boolean showMenu);
-        /**
-         * @param disabledFlags flags from View (STATUS_BAR_DISABLE_...) to indicate which key
-         * is currently disabled on the navigation bar.
-         * {@see View}
-         */
-        public void setDisabledFlags(int disabledFlags);
-    };
-    private ArrayList<NavigationBarCallback> mNavigationCallbacks =
-            new ArrayList<NavigationBarCallback>();
-
-    // Pie Control
-    protected PieController mPieController;
-    protected PieLayout mPieContainer;
-    private int mPieTriggerSlots;
-    public int mPieTriggerMask = Position.LEFT.FLAG
-            | Position.BOTTOM.FLAG
-            | Position.RIGHT.FLAG
-            | Position.TOP.FLAG;
-    private boolean mForceDisableBottomAndTopTrigger = false;
-    private View[] mPieTrigger = new View[Position.values().length];
-    private PieSettingsObserver mSettingsObserver;
-
-    private View.OnTouchListener mPieTriggerOnTouchHandler = new View.OnTouchListener() {
-        @Override
-        public boolean onTouch(View v, MotionEvent event) {
-            final int action = event.getAction();
-            final PieController.Tracker tracker = (PieController.Tracker)v.getTag();
-
-            if (tracker == null) {
-                if (DEBUG_INPUT) {
-                    Slog.v(TAG, "Pie trigger onTouch: action: " + action + ", ("
-                            + event.getAxisValue(MotionEvent.AXIS_X) + ","
-                            + event.getAxisValue(MotionEvent.AXIS_Y) + ") position: NULL returning: false");
-                }
-                return false;
-            }
-
-            if (!mPieController.isShowing()) {
-                if (event.getPointerCount() > 1) {
-                    if (DEBUG_INPUT) {
-                        Slog.v(TAG, "Pie trigger onTouch: action: " + action
-                                + ", (to many pointers) position: " + tracker.position.name()
-                                + " returning: false");
-                    }
-                    return false;
-                }
-
-                switch (action) {
-                    case MotionEvent.ACTION_DOWN:
-                        tracker.start(event);
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        if (tracker.move(event)) {
-                            if (DEBUG) {
-                                Slog.v(TAG, "Pie control activated on: ("
-                                        + event.getAxisValue(MotionEvent.AXIS_X) + ","
-                                        + event.getAxisValue(MotionEvent.AXIS_Y) + ") with position: "
-                                        + tracker.position.name());
-                            }
-                            // set the snap points depending on current trigger and mask
-                            mPieContainer.setSnapPoints(mPieTriggerMask & ~mPieTriggerSlots);
-                            // send the activation to the controller
-                            mPieController.activateFromTrigger(v, event, tracker.position);
-                            // forward a spoofed ACTION_DOWN event
-                            MotionEvent echo = event.copy();
-                            echo.setAction(MotionEvent.ACTION_DOWN);
-                            return mPieContainer.onTouch(v, echo);
-                        }
-                        break;
-                    default:
-                        // whatever it was, we are giving up on this one
-                        tracker.active = false;
-                        break;
-                }
-            } else {
-                if (DEBUG_INPUT) {
-                    Slog.v(TAG, "Pie trigger onTouch: action: " + action + ", ("
-                            + event.getAxisValue(MotionEvent.AXIS_X) + ","
-                            + event.getAxisValue(MotionEvent.AXIS_Y)
-                            + ") position: " + tracker.position.name() + " delegating");
-                }
-                return mPieContainer.onTouch(v, event);
-            }
-            if (DEBUG_INPUT) {
-                Slog.v(TAG, "Pie trigger onTouch: action: " + action + ", ("
-                        + event.getAxisValue(MotionEvent.AXIS_X) + ","
-                        + event.getAxisValue(MotionEvent.AXIS_Y) + ") position: "
-                        + tracker.position.name() + " returning: " + tracker.active);
-            }
-            return tracker.active;
-        }
-
-    };
-
     public int mSystemUiLayout = ExtendedPropertiesUtils.getActualProperty("com.android.systemui.layout");
 
     // UI-specific methods
@@ -351,8 +227,6 @@ public abstract class BaseStatusBar extends SystemUI implements
     @Override
     protected void onConfigurationChanged(Configuration newConfig) {
         if (mPieControlPanel != null) mPieControlPanel.bumpConfiguration();
-        if (DEBUG) Slog.d(TAG, "Configuration changed! Update pie triggers");
-        attachPie();
     }
 
     public QuickSettingsContainerView getQuickSettingsPanel() {
@@ -622,7 +496,11 @@ public abstract class BaseStatusBar extends SystemUI implements
             mNewCanvas.drawColor(0xFF000000);
             BitmapDrawable newBitmapDrawable = new BitmapDrawable(newBitmap);
 
+            TextSettingsObserver textObserver = new TextSettingsObserver(new Handler());
+            textObserver.observe();
+
             mTransition = new TransitionDrawable(new Drawable[]{currentBitmapDrawable, newBitmapDrawable});
+            mBarView.setBackground(mTransition);
 
             mLastIconColor = ColorUtils.getColorSettingInfo(mContext, Settings.System.STATUS_ICON_COLOR);
             mLastBackgroundColor = ColorUtils.getColorSettingInfo(mContext, ExtendedPropertiesUtils.isTablet()
@@ -699,10 +577,6 @@ public abstract class BaseStatusBar extends SystemUI implements
 
         SettingsObserver settingsObserver = new SettingsObserver(new Handler());
         settingsObserver.observe();
-
-        mSettingsObserver = new PieSettingsObserver(new Handler());
-        // this calls attachPie() implicitly
-        mSettingsObserver.onChange(true);
     }
 
     public void setHaloTaskerActive(boolean haloTaskerActive, boolean updateNotificationIcons) {
@@ -891,14 +765,21 @@ public abstract class BaseStatusBar extends SystemUI implements
         ColorUtils.ColorSettingInfo colorInfo = ColorUtils.getColorSettingInfo(mContext,
                 Settings.System.STATUS_ICON_COLOR);
         if (!colorInfo.lastColorString.equals(mLastIconColor.lastColorString)) {
-            if(mClock != null) mClock.setTextColor(colorInfo.lastColor);
+            if (colorInfo.isLastColorNull) {
+                TextSettingsObserver textObserver = new TextSettingsObserver(new Handler());
+                textObserver.observe();
+            } else {
+                if(mClock != null) mClock.setTextColor(colorInfo.lastColor);
+                if(mCClock != null) mCClock.setTextColor(colorInfo.lastColor);
+            }
             if(mSignalCluster != null) mSignalCluster.setColor(colorInfo);
             if(mBatteryController != null) mBatteryController.setColor(colorInfo);
+            if(mSbBatteryController != null) mSbBatteryController.setColor(colorInfo);
             if (mStatusIcons != null) {
                 for(int i = 0; i < mStatusIcons.getChildCount(); i++) {
                     Drawable iconDrawable = ((ImageView)mStatusIcons.getChildAt(i)).getDrawable();
                     if (colorInfo.isLastColorNull) {
-                        iconDrawable.clearColorFilter();
+                        iconDrawable.clearColorFilter();                        
                     } else {
                         iconDrawable.setColorFilter(colorInfo.lastColor, PorterDuff.Mode.SRC_IN);
                     }
@@ -1146,10 +1027,6 @@ public abstract class BaseStatusBar extends SystemUI implements
          return new H();
     }
 
-    protected boolean isScreenPortrait() {
-        return mContext.getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
-    }
-
     static void sendCloseSystemWindows(Context context, String reason) {
         if (ActivityManagerNative.isSystemReady()) {
             try {
@@ -1355,30 +1232,12 @@ public abstract class BaseStatusBar extends SystemUI implements
                  if (DEBUG) Slog.d(TAG, "opening search panel");
                  if (mSearchPanelView != null && mSearchPanelView.isAssistantAvailable()) {
                      mSearchPanelView.show(true, true);
-
-                     View bottom = mPieTrigger[Position.BOTTOM.INDEX];
-                     if (bottom != null) {
-                         WindowManager.LayoutParams lp =
-                                 (android.view.WindowManager.LayoutParams) bottom.getLayoutParams();
-                         lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-                         lp.flags |= WindowManager.LayoutParams.FLAG_SLIPPERY;
-                         mWindowManager.updateViewLayout(bottom, lp);
-                     }
                  }
                  break;
              case MSG_CLOSE_SEARCH_PANEL:
                 if (DEBUG) Slog.d(TAG, "closing search panel");
                 if (mSearchPanelView != null && mSearchPanelView.isShowing()) {
                     mSearchPanelView.show(false, true);
-
-                     View bottom = mPieTrigger[Position.BOTTOM.INDEX];
-                     if (bottom != null) {
-                         WindowManager.LayoutParams lp =
-                                 (android.view.WindowManager.LayoutParams) bottom.getLayoutParams();
-                         lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-                         lp.flags &= ~WindowManager.LayoutParams.FLAG_SLIPPERY;
-                         mWindowManager.updateViewLayout(bottom, lp);
-                     }
                 }
                 break;
             }
@@ -1934,390 +1793,32 @@ public abstract class BaseStatusBar extends SystemUI implements
         TextSettingsObserver(Handler handler) {
             super(handler);
         }
-    }
-
-    public void addNavigationBarCallback(NavigationBarCallback callback) {
-        mNavigationCallbacks.add(callback);
-    }
-
-    protected void propagateNavigationIconHints(int hints) {
-        for (NavigationBarCallback callback : mNavigationCallbacks) {
-            callback.setNavigationIconHints(hints);
-        }
-    }
-
-    protected void propagateMenuVisibility(boolean showMenu) {
-        for (NavigationBarCallback callback : mNavigationCallbacks) {
-            callback.setMenuVisibility(showMenu);
-        }
-    }
-
-    protected void propagateDisabledFlags(int disabledFlags) {
-        for (NavigationBarCallback callback : mNavigationCallbacks) {
-            callback.setDisabledFlags(disabledFlags);
-        }
-    }
-
-    // Pie Controls
-    private final class PieSettingsObserver extends ContentObserver {
-        PieSettingsObserver(Handler handler) {
-            super(handler);
-        }
 
         void observe() {
             ContentResolver resolver = mContext.getContentResolver();
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_CONTROLS), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_GRAVITY), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_TRIGGER_GRAVITY_LEFT_RIGHT), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_TRIGGER_THICKNESS), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_TRIGGER_HEIGHT), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_TRIGGER_SHOW), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_SOFTKEYBOARD_IS_SHOWING), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.CURRENT_UI_MODE), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.EXPANDED_DESKTOP_STATE), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.NAV_HIDE_ENABLE), false, this);
+            resolver.registerContentObserver(Settings.System
+                    .getUriFor(Settings.System.STATUSBAR_CLOCK_COLOR), false,
+                    this);
+            updateTextColor();
         }
 
         @Override
         public void onChange(boolean selfChange) {
-            mPieTriggerSlots = Settings.System.getInt(mContext.getContentResolver(),
-                    Settings.System.SPIE_GRAVITY, Position.LEFT.FLAG);
-            mPieShowTrigger = Settings.System.getInt(mContext.getContentResolver(),
-                    Settings.System.SPIE_TRIGGER_SHOW, 0) == 1;
-            mPieTriggerThickness = Settings.System.getFloat(mContext.getContentResolver(),
-                    Settings.System.SPIE_TRIGGER_THICKNESS,
-                    mContext.getResources().getDimension(R.dimen.pies_trigger_thickness));
-            mPieTriggerHeight = Settings.System.getFloat(mContext.getContentResolver(),
-                    Settings.System.SPIE_TRIGGER_HEIGHT,
-                    0.8f);
-            mPieTriggerGravityLeftRight = Settings.System.getInt(mContext.getContentResolver(),
-                    Settings.System.SPIE_TRIGGER_GRAVITY_LEFT_RIGHT,
-                    Gravity.CENTER_VERTICAL);
-            mPieImeIsShowing = Settings.System.getFloat(mContext.getContentResolver(),
-                    Settings.System.SPIE_SOFTKEYBOARD_IS_SHOWING, 0) == 1
-                    && Settings.System.getFloat(mContext.getContentResolver(),
-                    Settings.System.SPIE_ADJUST_TRIGGER_FOR_IME, 1) == 1;
-            attachPie();
+            updateTextColor();
         }
     }
 
-    private boolean isPieEnabled() {
-        boolean slimpie = Settings.System.getInt(mContext.getContentResolver(),
-                Settings.System.SPIE_CONTROLS,  0) == 1;
+    protected void updateTextColor() {
+        ContentResolver resolver = mContext.getContentResolver();
+        mClockColor = Settings.System.getInt(resolver,
+                Settings.System.STATUSBAR_CLOCK_COLOR,
+                0xFF33B5E5);
 
-        return (slimpie);
-    }
-
-    private void attachSPie() {
-        if (isPieEnabled()) {
-            // Create our container, if it does not exist already
-            if (mPieContainer == null) {
-                mPieContainer = new PieLayout(mContext);
-                WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        WindowManager.LayoutParams.TYPE_STATUS_BAR_PANEL,
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                        | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-                        PixelFormat.TRANSLUCENT);
-                // This title is for debugging only. See: dumpsys window
-                lp.setTitle("PieControlPanel");
-                lp.windowAnimations = android.R.style.Animation;
-                lp.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_BEHIND;
-
-                mWindowManager.addView(mPieContainer, lp);
-                // once we need a pie controller, we create one and keep it forever ...
-                if (mPieController == null) {
-                    mPieController = new PieController(mContext);
-                    mPieController.attachStatusBar(this);
-                    addNavigationBarCallback(mPieController);
-                }
-                mPieController.attachContainer(mPieContainer);
-            }
-
-            // add or update pie triggers
-            setupTriggers(false);
-            refreshPieTriggers();
-
-            if (DEBUG) {
-                Slog.d(TAG, "AttachPie with trigger position flags: "
-                        + mPieTriggerSlots + " masked: " + (mPieTriggerSlots & mPieTriggerMask));
-            }
-
-        } else {
-            for (int i = 0; i < mPieTrigger.length; i++) {
-                if (mPieTrigger[i] != null) {
-                    mWindowManager.removeView(mPieTrigger[i]);
-                    mPieTrigger[i] = null;
-                }
-            }
-            // detach from the pie container and unregister observers and receivers
-            if (mPieController != null) {
-                mPieController.detachContainer();
-                mPieContainer = null;
-            }
+        if (mClockColor == Integer.MIN_VALUE) {
+            // flag to reset the color
+            mClockColor = 0xFF33B5E5;
         }
+        if(mClock != null) mClock.setTextColor(mClockColor);
+        if(mCClock != null) mCClock.setTextColor(mClockColor);
     }
-
-    public void disableTriggers(boolean disableTriggers) {
-        if (isPieEnabled()) {
-            mDisableTriggers = disableTriggers;
-            setupTriggers(false);
-        }
-    }
-
-    public void recreatePie() {
-        if (isPieEnabled()) {
-            mPieController.constructSlices();
-        }
-    }
-
-    public void setupTriggers(boolean forceDisableBottomAndTopTrigger) {
-            if (mDisableTriggers) {
-                updatePieTriggerMask(0);
-                return;
-            }
-            mForceDisableBottomAndTopTrigger = forceDisableBottomAndTopTrigger;
-
-            ContentResolver cr = mContext.getContentResolver();
-
-            // get expanded desktop values
-            boolean expanded = Settings.System.getInt(cr,
-                    Settings.System.EXPANDED_DESKTOP_STATE, 0) == 1;
-
-            // get current ui mode value
-            int currentUiMode = Settings.System.getInt(cr,
-                    Settings.System.CURRENT_UI_MODE, 0);
-
-            // get statusbar auto hide value
-            boolean autoHideStatusBar = Settings.System.getInt(cr,
-                    Settings.System.HIDE_STATUSBAR, 0) == 1;
-
-            // get tacos of hiding
-            boolean navbarHide = Settings.System.getBoolean(cr,
-                     Settings.System.NAV_HIDE_ENABLE, false);
-
-            // get navigation bar values
-            final int showByDefault = mContext.getResources().getBoolean(
-                    com.android.internal.R.bool.config_showNavigationBar) ? 1 : 0;
-            boolean navbarEnable = Integer.parseInt(ExtendedPropertiesUtils.getProperty(
-                    "com.android.systemui.navbar.dpi", "100")) >= 0;
-            boolean navigationBarHeight = Settings.System.getInt(cr,
-                                Settings.System.NAVIGATION_BAR_HEIGHT,
-                                mContext.getResources().getDimensionPixelSize(
-                                                com.android.internal.R.dimen.navigation_bar_height)) != 0;
-            boolean navigationBarHeightLandscape = Settings.System.getInt(cr,
-                                Settings.System.NAVIGATION_BAR_HEIGHT_LANDSCAPE,
-                                mContext.getResources().getDimensionPixelSize(
-                                                com.android.internal.R.dimen.navigation_bar_height_landscape)) != 0;
-            boolean navigationBarWidth = Settings.System.getInt(cr,
-                                Settings.System.NAVIGATION_BAR_WIDTH,
-                                mContext.getResources().getDimensionPixelSize(
-                                                com.android.internal.R.dimen.navigation_bar_width)) != 0;
-
-            // disable on phones in landscape right trigger for navbar
-            boolean disableRightTriggerForNavbar =
-                    !isScreenPortrait()
-                    && navigationBarWidth;
-
-            // take in account the navbar dimensions
-            navbarEnable = (navbarEnable && isScreenPortrait() && navigationBarHeight)
-                                || (navbarEnable && !isScreenPortrait() && navigationBarHeightLandscape);
-
-            if ((!expanded && !navbarEnable && !autoHideStatusBar)
-                || (expanded && !autoHideStatusBar)) {
-                if (!mPieImeIsShowing) {
-                    if (currentUiMode == 0) {
-                        if (disableRightTriggerForNavbar) {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.BOTTOM.FLAG);
-                        } else {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.BOTTOM.FLAG
-                                            | Position.RIGHT.FLAG);
-                        }
-                    } else if (currentUiMode == 2) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.BOTTOM.FLAG
-                                        | Position.RIGHT.FLAG);
-                    } else if (currentUiMode == 1) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.BOTTOM.FLAG
-                                        | Position.RIGHT.FLAG);
-                    }
-                } else {
-                    if (currentUiMode == 0) {
-                        if (disableRightTriggerForNavbar) {
-                            updatePieTriggerMask(Position.LEFT.FLAG);
-                        } else {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.RIGHT.FLAG);
-                        }
-                    } else if (currentUiMode == 2) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.RIGHT.FLAG);
-                    } else if (currentUiMode == 1) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.RIGHT.FLAG);
-                    }
-                }
-            } else {
-                if (!mPieImeIsShowing) {
-                    if (currentUiMode == 0) {
-                        if (disableRightTriggerForNavbar) {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.BOTTOM.FLAG
-                                            | Position.TOP.FLAG);
-                        } else {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.BOTTOM.FLAG
-                                            | Position.RIGHT.FLAG
-                                            | Position.TOP.FLAG);
-                        }
-                    } else if (currentUiMode == 2) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.BOTTOM.FLAG
-                                        | Position.RIGHT.FLAG
-                                        | Position.TOP.FLAG);
-                    } else if (currentUiMode == 1) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.BOTTOM.FLAG
-                                        | Position.RIGHT.FLAG
-                                        | Position.TOP.FLAG);
-                    }
-                } else {
-                    if (currentUiMode == 0) {
-                        if (disableRightTriggerForNavbar) {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.TOP.FLAG);
-                        } else {
-                            updatePieTriggerMask(Position.LEFT.FLAG
-                                            | Position.RIGHT.FLAG
-                                            | Position.TOP.FLAG);
-                        }
-                    } else if (currentUiMode == 2) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.RIGHT.FLAG
-                                        | Position.TOP.FLAG);
-                    } else if (currentUiMode == 1) {
-                        updatePieTriggerMask(Position.LEFT.FLAG
-                                        | Position.RIGHT.FLAG
-                                        | Position.TOP.FLAG);
-                    }
-                }
-            }
-    }
-
-    private void updatePieTriggerMask(int newMask) {
-        int oldState = mPieTriggerSlots & mPieTriggerMask;
-        mPieTriggerMask = newMask;
-
-        // first we check, if it would make a change
-        if ((mPieTriggerSlots & mPieTriggerMask) != oldState
-                || mForceDisableBottomAndTopTrigger) {
-            if (isPieEnabled()) {
-                refreshPieTriggers();
-            }
-        }
-    }
-
-    // This should only be called, when is is clear that the pie controls are active
-    private void refreshPieTriggers() {
-        for (Position g : Position.values()) {
-            View trigger = mPieTrigger[g.INDEX];
-            if (trigger == null && (mPieTriggerSlots & mPieTriggerMask & g.FLAG) != 0) {
-                trigger = new View(mContext);
-                trigger.setClickable(false);
-                trigger.setLongClickable(false);
-                trigger.setTag(mPieController.buildTracker(g));
-                trigger.setOnTouchListener(mPieTriggerOnTouchHandler);
-
-                if (DEBUG) {
-                    Slog.d(TAG, "addPieTrigger on " + g.INDEX
-                            + " with position: " + g + " : " + trigger.toString());
-                }
-                showTrigger(trigger, DEBUG || mPieShowTrigger);
-                mWindowManager.addView(trigger, getPieTriggerLayoutParams(g));
-                mPieTrigger[g.INDEX] = trigger;
-            } else if (trigger != null && (mPieTriggerSlots & mPieTriggerMask & g.FLAG) == 0) {
-                mWindowManager.removeView(trigger);
-                mPieTrigger[g.INDEX] = null;
-            } else if (trigger != null) {
-                showTrigger(trigger, DEBUG || mPieShowTrigger);
-                mWindowManager.updateViewLayout(trigger, getPieTriggerLayoutParams(g));
-            }
-        }
-    }
-
-    private void showTrigger(View trigger, boolean show) {
-        if (show) {
-            trigger.setVisibility(View.VISIBLE);
-            trigger.setBackgroundColor(0x77ff0000);
-        } else {
-            trigger.setBackgroundColor(0x00000000);
-        }
-    }
-
-    private WindowManager.LayoutParams getPieTriggerLayoutParams(Position position) {
-        final Resources res = mContext.getResources();
-
-        float pieTriggerHeight = mPieTriggerHeight;
-        final float pieImePortraitMinHeight = 0.52f;
-        final float pieImeLandscapeMinHeight = 0.32f;
-        if (mPieImeIsShowing && isScreenPortrait()
-                && !mForceDisableBottomAndTopTrigger
-                && pieTriggerHeight > pieImePortraitMinHeight) {
-            pieTriggerHeight = pieImePortraitMinHeight;
-        } else if (mPieImeIsShowing && !isScreenPortrait()
-                && !mForceDisableBottomAndTopTrigger
-                && pieTriggerHeight > pieImeLandscapeMinHeight) {
-            pieTriggerHeight = pieImeLandscapeMinHeight;
-        }
-
-        int width = (int) (res.getDisplayMetrics().widthPixels * 0.9f);
-        int height = (int) (res.getDisplayMetrics().heightPixels * pieTriggerHeight);
-        int triggerThickness = (int) ((mPieTriggerThickness * res.getDisplayMetrics().density) + 0.5);
-        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                (position == Position.TOP || position == Position.BOTTOM
-                        ? width : triggerThickness),
-                (position == Position.LEFT || position == Position.RIGHT
-                        ? height : triggerThickness),
-                WindowManager.LayoutParams.TYPE_STATUS_BAR_PANEL,
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_SPLIT_TOUCH,
-                PixelFormat.TRANSLUCENT);
-        // This title is for debugging only. See: dumpsys window
-        lp.setTitle("PieTrigger" + position.name());
-        if (position == Position.LEFT || position == Position.RIGHT) {
-            lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED
-                    | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
-        } else {
-            lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED
-                    | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING;
-        }
-        if (mPieImeIsShowing && !mForceDisableBottomAndTopTrigger
-                    && (position == Position.LEFT || position == Position.RIGHT)) {
-            lp.gravity = position.ANDROID_GRAVITY | Gravity.TOP;
-        } else if (position == Position.LEFT || position == Position.RIGHT) {
-            lp.gravity = position.ANDROID_GRAVITY | mPieTriggerGravityLeftRight;
-        } else {
-            lp.gravity = position.ANDROID_GRAVITY;
-        }
-        return lp;
-    }
-
 }

@@ -273,17 +273,14 @@ public class SbBatteryController extends LinearLayout {
         void observe() {
             ContentResolver resolver = mContext.getContentResolver();
             resolver.registerContentObserver(Settings.System
-                    .getUriFor(Settings.System.STATUSBAR_BATTERY_ICON), false, this);
+                    .getUriFor(Settings.System.STATUSBAR_BATTERY_ICON), false,
+                    this);
             resolver.registerContentObserver(Settings.System
-                    .getUriFor(Settings.System.PAC_STATUS), false, this);
+                    .getUriFor(Settings.System.PAC_STATUS), false,
+                    this);
             resolver.registerContentObserver(Settings.System
-                    .getUriFor(Settings.System.STATUS_ICON_COLOR), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_DISABLE_STATUSBAR_INFO), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.SPIE_CONTROLS), false, this);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.EXPANDED_DESKTOP_STATE), false, this);
+                    .getUriFor(Settings.System.STATUS_ICON_COLOR), false,
+                    this);
         }
 
         @Override
@@ -296,21 +293,6 @@ public class SbBatteryController extends LinearLayout {
         // Slog.i(TAG, "updated settings values");
         mBatteryStyle = Settings.System.getInt(mContext.getContentResolver(),
                 Settings.System.STATUSBAR_BATTERY_ICON, 0);
-
-        boolean disableStatusBarInfo = Settings.System.getInt(mContext.getContentResolver(),
-                Settings.System.SPIE_DISABLE_STATUSBAR_INFO, 0) == 1;
-        if (disableStatusBarInfo) {
-            // call only the settings if statusbar info is really hidden
-            int pieMode = Settings.System.getInt(mContext.getContentResolver(),
-                    Settings.System.SPIE_CONTROLS, 0);
-            boolean expandedDesktopState = Settings.System.getInt(mContext.getContentResolver(),
-                    Settings.System.EXPANDED_DESKTOP_STATE, 0) == 1;
-
-            if (pieMode == 2
-                || pieMode == 1 && expandedDesktopState) {
-                mBatteryStyle = STYLE_HIDE;
-            }
-        }
 
         switch (mBatteryStyle) {
             case STYLE_ICON_ONLY:
