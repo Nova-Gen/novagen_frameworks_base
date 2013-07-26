@@ -24,7 +24,4 @@
 
     <!-- Minimum prediction score required to pass a gesture as recognized -->
     <integer name="min_gesture_prediction_score">2</integer>
-
-    <!-- Multi User Setting -->
-    <integer name="config_multiuserMaximumUsers">4</integer>
 </resources>
